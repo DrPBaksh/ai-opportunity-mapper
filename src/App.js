@@ -11,6 +11,67 @@ const COLORS = {
   accent: '#B52555'      // Imperial Red
 };
 
+// Helper function to create text texture
+function createTextTexture(text, fontSize = 64, color = '#1F2A44') {
+  const canvas = document.createElement('canvas');
+  const context = canvas.getContext('2d');
+  
+  // Set canvas size
+  canvas.width = 512;
+  canvas.height = 128;
+  
+  // Set font
+  context.font = `${fontSize}px Arial`;
+  context.fillStyle = color;
+  context.textAlign = 'center';
+  context.textBaseline = 'middle';
+  
+  // Clear background
+  context.clearRect(0, 0, canvas.width, canvas.height);
+  
+  // Add background for better visibility
+  context.fillStyle = 'rgba(255, 255, 255, 0.9)';
+  context.fillRect(0, 0, canvas.width, canvas.height);
+  
+  // Add border
+  context.strokeStyle = color;
+  context.lineWidth = 2;
+  context.strokeRect(2, 2, canvas.width - 4, canvas.height - 4);
+  
+  // Add text
+  context.fillStyle = color;
+  context.fillText(text, canvas.width / 2, canvas.height / 2);
+  
+  return canvas;
+}
+
+// Helper function to create axis labels
+function createAxisLabel(text, fontSize = 48, color = '#CE0058') {
+  const canvas = document.createElement('canvas');
+  const context = canvas.getContext('2d');
+  
+  canvas.width = 256;
+  canvas.height = 64;
+  
+  context.font = `bold ${fontSize}px Arial`;
+  context.fillStyle = color;
+  context.textAlign = 'center';
+  context.textBaseline = 'middle';
+  
+  // Clear background
+  context.clearRect(0, 0, canvas.width, canvas.height);
+  
+  // Add semi-transparent background
+  context.fillStyle = 'rgba(255, 255, 255, 0.8)';
+  context.fillRect(0, 0, canvas.width, canvas.height);
+  
+  // Add text
+  context.fillStyle = color;
+  context.fillText(text, canvas.width / 2, canvas.height / 2);
+  
+  return canvas;
+}
+
 // 3D Scene Component
 function ThreeVisualization({ tasks, highlightedTasks, onTaskClick, selectedTask }) {
   const mountRef = useRef(null);
@@ -18,6 +79,7 @@ function ThreeVisualization({ tasks, highlightedTasks, onTaskClick, selectedTask
   const rendererRef = useRef(null);
   const cameraRef = useRef(null);
   const taskMeshesRef = useRef([]);
+  const labelMeshesRef = useRef([]);
   const animationIdRef = useRef(null);
 
   useEffect(() => {
@@ -28,12 +90,12 @@ function ThreeVisualization({ tasks, highlightedTasks, onTaskClick, selectedTask
 
     // Scene setup
     const scene = new THREE.Scene();
-    scene.background = new THREE.Color(0xf8f9fa);
+    scene.background = new THREE.Color(0xf0f0f0);
     sceneRef.current = scene;
 
     // Camera setup
     const camera = new THREE.PerspectiveCamera(60, width / height, 0.1, 1000);
-    camera.position.set(8, 6, 8);
+    camera.position.set(10, 8, 10);
     camera.lookAt(0, 0, 0);
     cameraRef.current = camera;
 
@@ -50,23 +112,26 @@ function ThreeVisualization({ tasks, highlightedTasks, onTaskClick, selectedTask
     rendererRef.current = renderer;
 
     // Lighting
-    const ambientLight = new THREE.AmbientLight(0xffffff, 0.8);
+    const ambientLight = new THREE.AmbientLight(0xffffff, 0.7);
     scene.add(ambientLight);
 
-    const directionalLight = new THREE.DirectionalLight(0xffffff, 0.6);
-    directionalLight.position.set(10, 10, 5);
+    const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
+    directionalLight.position.set(15, 15, 10);
     directionalLight.castShadow = true;
+    directionalLight.shadow.mapSize.width = 2048;
+    directionalLight.shadow.mapSize.height = 2048;
     scene.add(directionalLight);
 
-    // Create coordinate system
-    const axisLength = 3;
+    // Create coordinate system with scale 0-10 mapped to -4 to +4
+    const axisLength = 4.5;
+    const tickLength = 0.2;
     
     // X-axis (ROI) - Red line
     const xGeometry = new THREE.BufferGeometry().setFromPoints([
       new THREE.Vector3(-axisLength, 0, 0),
       new THREE.Vector3(axisLength, 0, 0)
     ]);
-    const xLine = new THREE.Line(xGeometry, new THREE.LineBasicMaterial({ color: 0xCE0058, linewidth: 2 }));
+    const xLine = new THREE.Line(xGeometry, new THREE.LineBasicMaterial({ color: 0xCE0058, linewidth: 3 }));
     scene.add(xLine);
 
     // Y-axis (Task Enjoyment) - Red line
@@ -74,7 +139,7 @@ function ThreeVisualization({ tasks, highlightedTasks, onTaskClick, selectedTask
       new THREE.Vector3(0, -axisLength, 0),
       new THREE.Vector3(0, axisLength, 0)
     ]);
-    const yLine = new THREE.Line(yGeometry, new THREE.LineBasicMaterial({ color: 0xCE0058, linewidth: 2 }));
+    const yLine = new THREE.Line(yGeometry, new THREE.LineBasicMaterial({ color: 0xCE0058, linewidth: 3 }));
     scene.add(yLine);
 
     // Z-axis (Complexity) - Red line
@@ -82,53 +147,114 @@ function ThreeVisualization({ tasks, highlightedTasks, onTaskClick, selectedTask
       new THREE.Vector3(0, 0, -axisLength),
       new THREE.Vector3(0, 0, axisLength)
     ]);
-    const zLine = new THREE.Line(zGeometry, new THREE.LineBasicMaterial({ color: 0xCE0058, linewidth: 2 }));
+    const zLine = new THREE.Line(zGeometry, new THREE.LineBasicMaterial({ color: 0xCE0058, linewidth: 3 }));
     scene.add(zLine);
 
-    // Add grid
-    const gridHelper = new THREE.GridHelper(6, 10, 0xcccccc, 0xeeeeee);
+    // Add tick marks and numerical labels for each axis
+    const tickMaterial = new THREE.MeshBasicMaterial({ color: 0x666666 });
+    
+    // X-axis ticks and labels (ROI: 1-10)
+    for (let i = 1; i <= 10; i++) {
+      const x = (i - 5.5) * 0.8; // Map 1-10 to coordinate system
+      
+      // Tick mark
+      const tickGeometry = new THREE.BoxGeometry(0.02, tickLength, 0.02);
+      const tick = new THREE.Mesh(tickGeometry, tickMaterial);
+      tick.position.set(x, -tickLength/2, 0);
+      scene.add(tick);
+      
+      // Number label
+      const numberCanvas = createAxisLabel(i.toString(), 32, '#666666');
+      const numberTexture = new THREE.CanvasTexture(numberCanvas);
+      const numberMaterial = new THREE.SpriteMaterial({ map: numberTexture });
+      const numberSprite = new THREE.Sprite(numberMaterial);
+      numberSprite.position.set(x, -0.5, 0);
+      numberSprite.scale.set(0.5, 0.125, 1);
+      scene.add(numberSprite);
+    }
+
+    // Y-axis ticks and labels (Task Enjoyment: 1-10)
+    for (let i = 1; i <= 10; i++) {
+      const y = (i - 5.5) * 0.8;
+      
+      // Tick mark
+      const tickGeometry = new THREE.BoxGeometry(tickLength, 0.02, 0.02);
+      const tick = new THREE.Mesh(tickGeometry, tickMaterial);
+      tick.position.set(-tickLength/2, y, 0);
+      scene.add(tick);
+      
+      // Number label
+      const numberCanvas = createAxisLabel(i.toString(), 32, '#666666');
+      const numberTexture = new THREE.CanvasTexture(numberCanvas);
+      const numberMaterial = new THREE.SpriteMaterial({ map: numberTexture });
+      const numberSprite = new THREE.Sprite(numberMaterial);
+      numberSprite.position.set(-0.7, y, 0);
+      numberSprite.scale.set(0.5, 0.125, 1);
+      scene.add(numberSprite);
+    }
+
+    // Z-axis ticks and labels (Complexity: 1-10)
+    for (let i = 1; i <= 10; i++) {
+      const z = (i - 5.5) * 0.8;
+      
+      // Tick mark
+      const tickGeometry = new THREE.BoxGeometry(0.02, 0.02, tickLength);
+      const tick = new THREE.Mesh(tickGeometry, tickMaterial);
+      tick.position.set(0, -tickLength/2, z);
+      scene.add(tick);
+      
+      // Number label
+      const numberCanvas = createAxisLabel(i.toString(), 32, '#666666');
+      const numberTexture = new THREE.CanvasTexture(numberCanvas);
+      const numberMaterial = new THREE.SpriteMaterial({ map: numberTexture });
+      const numberSprite = new THREE.Sprite(numberMaterial);
+      numberSprite.position.set(0, -0.5, z);
+      numberSprite.scale.set(0.5, 0.125, 1);
+      scene.add(numberSprite);
+    }
+
+    // Add axis title labels
+    // ROI label (X-axis)
+    const roiCanvas = createAxisLabel('ROI Potential →', 40, '#CE0058');
+    const roiTexture = new THREE.CanvasTexture(roiCanvas);
+    const roiMaterial = new THREE.SpriteMaterial({ map: roiTexture });
+    const roiSprite = new THREE.Sprite(roiMaterial);
+    roiSprite.position.set(5, -1, 0);
+    roiSprite.scale.set(2, 0.5, 1);
+    scene.add(roiSprite);
+
+    // Task Enjoyment label (Y-axis)
+    const enjoymentCanvas = createAxisLabel('↑ Task Enjoyment', 40, '#CE0058');
+    const enjoymentTexture = new THREE.CanvasTexture(enjoymentCanvas);
+    const enjoymentMaterial = new THREE.SpriteMaterial({ map: enjoymentTexture });
+    const enjoymentSprite = new THREE.Sprite(enjoymentMaterial);
+    enjoymentSprite.position.set(-1.5, 5, 0);
+    enjoymentSprite.scale.set(2, 0.5, 1);
+    scene.add(enjoymentSprite);
+
+    // Complexity label (Z-axis)
+    const complexityCanvas = createAxisLabel('Solution Complexity →', 40, '#CE0058');
+    const complexityTexture = new THREE.CanvasTexture(complexityCanvas);
+    const complexityMaterial = new THREE.SpriteMaterial({ map: complexityTexture });
+    const complexitySprite = new THREE.Sprite(complexityMaterial);
+    complexitySprite.position.set(0, -1, 5);
+    complexitySprite.scale.set(2, 0.5, 1);
+    scene.add(complexitySprite);
+
+    // Add a subtle grid floor
+    const gridHelper = new THREE.GridHelper(8, 16, 0xcccccc, 0xeeeeee);
+    gridHelper.position.y = -axisLength - 0.5;
     scene.add(gridHelper);
-
-    // Add some reference cubes at axis endpoints
-    const cubeGeometry = new THREE.BoxGeometry(0.1, 0.1, 0.1);
-    const cubeMaterial = new THREE.MeshBasicMaterial({ color: 0xCE0058 });
-    
-    // X-axis endpoints
-    const xCube1 = new THREE.Mesh(cubeGeometry, cubeMaterial);
-    xCube1.position.set(axisLength, 0, 0);
-    scene.add(xCube1);
-    
-    const xCube2 = new THREE.Mesh(cubeGeometry, cubeMaterial);
-    xCube2.position.set(-axisLength, 0, 0);
-    scene.add(xCube2);
-
-    // Y-axis endpoints
-    const yCube1 = new THREE.Mesh(cubeGeometry, cubeMaterial);
-    yCube1.position.set(0, axisLength, 0);
-    scene.add(yCube1);
-    
-    const yCube2 = new THREE.Mesh(cubeGeometry, cubeMaterial);
-    yCube2.position.set(0, -axisLength, 0);
-    scene.add(yCube2);
-
-    // Z-axis endpoints
-    const zCube1 = new THREE.Mesh(cubeGeometry, cubeMaterial);
-    zCube1.position.set(0, 0, axisLength);
-    scene.add(zCube1);
-    
-    const zCube2 = new THREE.Mesh(cubeGeometry, cubeMaterial);
-    zCube2.position.set(0, 0, -axisLength);
-    scene.add(zCube2);
 
     // Mouse controls
     let isMouseDown = false;
     let mouseX = 0;
     let mouseY = 0;
-    let targetRotationX = 0.3;
-    let targetRotationY = 0.5;
-    let currentRotationX = 0.3;
-    let currentRotationY = 0.5;
-    let radius = 12;
+    let targetRotationX = 0.2;
+    let targetRotationY = 0.8;
+    let currentRotationX = 0.2;
+    let currentRotationY = 0.8;
+    let radius = 15;
 
     const handleMouseDown = (event) => {
       event.preventDefault();
@@ -145,7 +271,7 @@ function ThreeVisualization({ tasks, highlightedTasks, onTaskClick, selectedTask
       
       targetRotationY += deltaX * 0.01;
       targetRotationX += deltaY * 0.01;
-      targetRotationX = Math.max(-Math.PI/2, Math.min(Math.PI/2, targetRotationX));
+      targetRotationX = Math.max(-Math.PI/3, Math.min(Math.PI/3, targetRotationX));
       
       mouseX = event.clientX;
       mouseY = event.clientY;
@@ -158,7 +284,7 @@ function ThreeVisualization({ tasks, highlightedTasks, onTaskClick, selectedTask
     const handleWheel = (event) => {
       event.preventDefault();
       const scale = event.deltaY > 0 ? 1.1 : 0.9;
-      radius = Math.max(5, Math.min(30, radius * scale));
+      radius = Math.max(8, Math.min(40, radius * scale));
     };
 
     // Raycaster for click detection
@@ -166,7 +292,7 @@ function ThreeVisualization({ tasks, highlightedTasks, onTaskClick, selectedTask
     const mouse = new THREE.Vector2();
 
     const handleClick = (event) => {
-      if (isMouseDown) return; // Don't trigger click if dragging
+      if (isMouseDown) return;
       
       const rect = renderer.domElement.getBoundingClientRect();
       mouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
@@ -206,8 +332,15 @@ function ThreeVisualization({ tasks, highlightedTasks, onTaskClick, selectedTask
       // Animate highlighted tasks
       taskMeshesRef.current.forEach((mesh, index) => {
         if (mesh && tasks[index] && highlightedTasks.includes(tasks[index].id)) {
-          mesh.rotation.y += 0.02;
-          mesh.rotation.x += 0.01;
+          mesh.rotation.y += 0.03;
+          mesh.rotation.x += 0.02;
+        }
+      });
+
+      // Make labels always face camera
+      labelMeshesRef.current.forEach(label => {
+        if (label) {
+          label.lookAt(camera.position);
         }
       });
 
@@ -239,44 +372,53 @@ function ThreeVisualization({ tasks, highlightedTasks, onTaskClick, selectedTask
   useEffect(() => {
     if (!sceneRef.current) return;
 
-    // Clear existing task meshes
-    taskMeshesRef.current.forEach(mesh => {
+    // Clear existing task meshes and labels
+    [...taskMeshesRef.current, ...labelMeshesRef.current].forEach(mesh => {
       if (mesh) {
         sceneRef.current.remove(mesh);
         if (mesh.geometry) mesh.geometry.dispose();
-        if (mesh.material) mesh.material.dispose();
+        if (mesh.material) {
+          if (mesh.material.map) mesh.material.map.dispose();
+          mesh.material.dispose();
+        }
       }
     });
     taskMeshesRef.current = [];
+    labelMeshesRef.current = [];
 
     // Create new task meshes
     tasks.forEach((task, index) => {
-      // Convert 1-10 scale to -2.5 to +2.5 coordinate system for better visibility
-      const x = (task.roi - 5.5) * 0.9;
-      const y = (task.enjoyment - 5.5) * 0.9;
-      const z = (task.complexity - 5.5) * 0.9;
+      // Convert 1-10 scale to coordinate system
+      const x = (task.roi - 5.5) * 0.8;
+      const y = (task.enjoyment - 5.5) * 0.8;
+      const z = (task.complexity - 5.5) * 0.8;
 
-      // Size based on complexity (make them more visible)
-      const size = 0.2 + (task.complexity / 10) * 0.3;
+      // Size based on complexity (make them clearly visible)
+      const baseSize = 0.25;
+      const size = baseSize + (task.complexity / 10) * 0.35;
       
       // Color based on ROI and highlight status
       let color;
       if (highlightedTasks.includes(task.id)) {
         color = new THREE.Color(0xE96301); // Orange for highlighted
       } else {
-        // Color based on ROI - from light pink to dark red
+        // Color gradient from pink to deep red based on ROI
         const intensity = task.roi / 10;
-        const hue = 340 / 360; // Pink hue
-        const saturation = 0.85;
-        const lightness = 0.3 + intensity * 0.4;
-        color = new THREE.Color().setHSL(hue, saturation, lightness);
+        color = new THREE.Color().lerpColors(
+          new THREE.Color(0xffb6c1), // Light pink for low ROI
+          new THREE.Color(0x8B0000),  // Dark red for high ROI
+          intensity
+        );
       }
 
+      // Create sphere with better materials for visibility
       const geometry = new THREE.SphereGeometry(size, 32, 32);
-      const material = new THREE.MeshLambertMaterial({ 
+      const material = new THREE.MeshPhongMaterial({ 
         color: color,
-        transparent: highlightedTasks.includes(task.id),
-        opacity: highlightedTasks.includes(task.id) ? 0.9 : 0.8
+        transparent: true,
+        opacity: 0.9,
+        shininess: 100,
+        specular: new THREE.Color(0x111111)
       });
       
       const mesh = new THREE.Mesh(geometry, material);
@@ -284,23 +426,54 @@ function ThreeVisualization({ tasks, highlightedTasks, onTaskClick, selectedTask
       mesh.castShadow = true;
       mesh.receiveShadow = true;
       
-      // Add a small label above each sphere
-      const labelGeometry = new THREE.RingGeometry(0.02, 0.04, 8);
-      const labelMaterial = new THREE.MeshBasicMaterial({ 
-        color: 0x1F2A44,
+      // Add outline for better visibility
+      const outlineGeometry = new THREE.SphereGeometry(size * 1.05, 16, 16);
+      const outlineMaterial = new THREE.MeshBasicMaterial({ 
+        color: 0x000000,
         transparent: true,
-        opacity: 0.7
+        opacity: 0.3,
+        side: THREE.BackSide
       });
-      const label = new THREE.Mesh(labelGeometry, labelMaterial);
-      label.position.set(x, y + size + 0.1, z);
-      label.lookAt(cameraRef.current.position);
+      const outline = new THREE.Mesh(outlineGeometry, outlineMaterial);
+      outline.position.set(x, y, z);
       
+      sceneRef.current.add(outline);
       sceneRef.current.add(mesh);
-      sceneRef.current.add(label);
       taskMeshesRef.current.push(mesh);
+      
+      // Create text label for task name
+      const labelCanvas = createTextTexture(task.name, 48, '#1F2A44');
+      const labelTexture = new THREE.CanvasTexture(labelCanvas);
+      const labelMaterial = new THREE.SpriteMaterial({ 
+        map: labelTexture,
+        transparent: true,
+        opacity: 0.9
+      });
+      const labelSprite = new THREE.Sprite(labelMaterial);
+      labelSprite.position.set(x, y + size + 0.5, z);
+      labelSprite.scale.set(1.5, 0.375, 1); // Adjust scale for readability
+      
+      sceneRef.current.add(labelSprite);
+      labelMeshesRef.current.push(labelSprite);
+
+      // Add small indicator showing the values below the sphere
+      const valueText = `ROI:${task.roi} E:${task.enjoyment} C:${task.complexity}`;
+      const valueCanvas = createTextTexture(valueText, 32, '#666666');
+      const valueTexture = new THREE.CanvasTexture(valueCanvas);
+      const valueMaterial = new THREE.SpriteMaterial({ 
+        map: valueTexture,
+        transparent: true,
+        opacity: 0.8
+      });
+      const valueSprite = new THREE.Sprite(valueMaterial);
+      valueSprite.position.set(x, y - size - 0.3, z);
+      valueSprite.scale.set(1.2, 0.3, 1);
+      
+      sceneRef.current.add(valueSprite);
+      labelMeshesRef.current.push(valueSprite);
     });
 
-    console.log(`Created ${tasks.length} task spheres`); // Debug log
+    console.log(`Created ${tasks.length} task spheres with labels`);
   }, [tasks, highlightedTasks]);
 
   // Handle window resize
@@ -633,7 +806,7 @@ export default function AIOpportunityMapper() {
             <h3 className="font-semibold mb-4" style={{ color: COLORS.tertiary }}>
               Current Challenges ({tasks.length})
             </h3>
-            <div className="space-y-2 max-h-40 overflow-y-auto">
+            <div className="space-y-2 max-h-40 overflow-y-auto tasks-list">
               {tasks.map(task => (
                 <div 
                   key={task.id}
@@ -654,13 +827,13 @@ export default function AIOpportunityMapper() {
 
         {/* 3D Visualization */}
         <div className="lg:col-span-3">
-          <div className="bg-white rounded-lg shadow-sm border h-[600px]" style={{ borderColor: COLORS.light }}>
+          <div className="bg-white rounded-lg shadow-sm border h-[700px]" style={{ borderColor: COLORS.light }}>
             <div className="p-4 border-b" style={{ borderColor: COLORS.light }}>
               <h3 className="font-semibold" style={{ color: COLORS.tertiary }}>
                 3D Opportunity Map
               </h3>
               <p className="text-sm text-gray-600 mt-1">
-                Click and drag to rotate • Scroll to zoom • Click tasks for details
+                Click and drag to rotate • Scroll to zoom • Click spheres for details
               </p>
             </div>
             
@@ -676,25 +849,27 @@ export default function AIOpportunityMapper() {
           
           {/* Legend */}
           <div className="mt-4 bg-white rounded-lg shadow-sm p-4 border" style={{ borderColor: COLORS.light }}>
-            <h4 className="font-semibold mb-3" style={{ color: COLORS.tertiary }}>Legend</h4>
+            <h4 className="font-semibold mb-3" style={{ color: COLORS.tertiary }}>Legend & Sweet Spot</h4>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
               <div>
-                <strong style={{ color: COLORS.primary }}>Axes:</strong>
-                <div>X = ROI Potential (1-10)</div>
-                <div>Y = Task Enjoyment (1-10)</div>
-                <div>Z = Solution Complexity (1-10)</div>
+                <strong style={{ color: COLORS.primary }}>Axes (1-10 scale):</strong>
+                <div>🔴 X = ROI Potential</div>
+                <div>🔴 Y = Task Enjoyment</div>
+                <div>🔴 Z = Solution Complexity</div>
               </div>
               <div>
                 <strong style={{ color: COLORS.primary }}>Visual Cues:</strong>
-                <div>Color = ROI Level</div>
-                <div>Size = Complexity Level</div>
-                <div>Orange = Highlighted</div>
+                <div>🎨 Color = ROI Level</div>
+                <div>📏 Size = Complexity Level</div>
+                <div>🟠 Orange = Highlighted</div>
+                <div>📊 Values shown below spheres</div>
               </div>
               <div>
-                <strong style={{ color: COLORS.primary }}>Sweet Spot:</strong>
-                <div>High ROI (right)</div>
-                <div>Low Enjoyment (bottom)</div>
-                <div>Low Complexity (front)</div>
+                <strong style={{ color: COLORS.primary }}>🎯 Sweet Spot:</strong>
+                <div>✅ High ROI (right)</div>
+                <div>✅ Low Enjoyment (bottom)</div>
+                <div>✅ Low Complexity (front)</div>
+                <div className="text-xs mt-1 text-gray-600">Best AI opportunities!</div>
               </div>
             </div>
           </div>
