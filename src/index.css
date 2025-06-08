@@ -1,0 +1,60 @@
+body {
+  margin: 0;
+  font-family: Arial, -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
+    'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
+    sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+code {
+  font-family: source-code-pro, Menlo, Monaco, Consolas, 'Courier New',
+    monospace;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+/* Corndel brand styles */
+:root {
+  --corndel-primary: #CE0058;
+  --corndel-secondary: #E96301;
+  --corndel-tertiary: #1F2A44;
+  --corndel-light: #ddd0c0;
+}
+
+.corndel-primary {
+  color: var(--corndel-primary);
+}
+
+.corndel-bg-primary {
+  background-color: var(--corndel-primary);
+}
+
+.corndel-secondary {
+  color: var(--corndel-secondary);
+}
+
+.corndel-bg-secondary {
+  background-color: var(--corndel-secondary);
+}
+
+/* Custom scrollbar for tasks list */
+.tasks-list::-webkit-scrollbar {
+  width: 6px;
+}
+
+.tasks-list::-webkit-scrollbar-track {
+  background: #f1f1f1;
+  border-radius: 3px;
+}
+
+.tasks-list::-webkit-scrollbar-thumb {
+  background: var(--corndel-light);
+  border-radius: 3px;
+}
+
+.tasks-list::-webkit-scrollbar-thumb:hover {
+  background: var(--corndel-primary);
+}
